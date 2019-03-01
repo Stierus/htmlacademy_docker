@@ -1,0 +1,79 @@
+version: '2'
+
+### Networks Setup ###########################################
+networks:
+    main:
+
+### Volumes Setup ###########################################
+volumes:
+    mysql:
+        driver: "local"
+
+### Services Setup ###########################################
+services:
+
+### PHP-FPM Container #######################################
+    php-fpm:
+        container_name: ${PROJECT_PREFIX}-app
+        build:
+            context: ./php-fpm
+            args:
+                PHP_XDEBUG_ENABLED: ${PHP_XDEBUG_ENABLED}
+        environment:
+            XDEBUG_CONFIG: remote_enable=1 remote_host=${PHP_XDEBUG_REMOTE_HOST} remote_port=${PHP_XDEBUG_REMOTE_PORT}
+            PHP_IDE_CONFIG: serverName=htmlacademy
+        depends_on:
+            - mysql
+        links:
+            - mysql
+        expose:
+            - "9000"
+        volumes:
+            - ./project:/app:consistent
+            - ./php-fpm/logs:/var/log/php-fpm:delegated
+            - ./php-fpm/conf/php.ini:/usr/local/etc/php/conf.d/php.ini:delegated
+            - ./php-fpm/conf/web.conf:/usr/local/etc/php-fpm.d/web.conf:delegated
+        networks:
+            - main
+
+### Nginx Server Container ##################################
+    nginx:
+        container_name: ${PROJECT_PREFIX}-nginx
+        image: nginx
+        depends_on:
+            - php-fpm
+        volumes:
+            - ./project:/app:delegated
+            - ./nginx/logs:/var/log/nginx:delegated
+            - ./nginx/conf/sites/:/etc/nginx/conf.d:delegated
+        ports:
+            - "80:80"
+            - "443:443"
+        command: ["nginx", "-g", "daemon off;"]
+        links:
+            - php-fpm
+        networks:
+             main:
+                  aliases:
+                    - htmlacademy
+
+### MySQL Container #########################################
+    mysql:
+        container_name: ${PROJECT_PREFIX}-mysql
+        image: mysql:5.7
+        volumes:
+            - ./mysql/data:/var/lib/mysql:delegated
+            - ./mysql/conf/my.cnf:/etc/mysql/my.cnf:delegated
+        restart: always
+        environment:
+            MYSQL_ROOT_PASSWORD: root
+            MYSQL_DATABASE: academy
+            MYSQL_USER: academy
+            MYSQL_PASSWORD: academy
+        command: [mysqld, --character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci]
+        ports:
+            - "3306:3306"
+        networks:
+            main:
+                aliases:
+                    - mysql
